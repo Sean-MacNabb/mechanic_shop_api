@@ -2,14 +2,17 @@ from flask import request, jsonify
 from sqlalchemy import select
 from marshmallow import ValidationError
 
-from application.extensions import db
-from application.models import Customer
+from application.extensions import db, limiter
+from application.models import Customer, ServiceTicket
 from application.blueprints.customer import customer_bp
-from application.blueprints.customer.schemas import customer_schema, customers_schema
+from application.blueprints.customer.schemas import customer_schema, customers_schema, login_schema
+from application.blueprints.service_ticket.schemas import service_tickets_schema
+from application.utils.util import encode_token, token_required
 
 
 # CREATE a new customer
 @customer_bp.route("/", methods=['POST'])
+@limiter.limit("5 per hour")  # limits spam/abuse of account creation
 def create_customer():
     try:
         customer_data = customer_schema.load(request.json)
@@ -28,12 +31,39 @@ def create_customer():
     return customer_schema.jsonify(new_customer), 201
 
 
-# READ all customers
+# LOGIN with email and password, returns a token
+@customer_bp.route("/login", methods=['POST'])
+def login():
+    try:
+        credentials = login_schema.load(request.json)
+        email = credentials['email']
+        password = credentials['password']
+    except ValidationError as e:
+        return jsonify(e.messages), 400
+
+    query = select(Customer).where(Customer.email == email)
+    customer = db.session.execute(query).scalar_one_or_none()
+
+    if customer and customer.password == password:
+        auth_token = encode_token(customer.id)
+        return jsonify({
+            "status": "success",
+            "message": "Successfully logged in",
+            "auth_token": auth_token
+        }), 200
+    return jsonify({"message": "Invalid email or password"}), 401
+
+
+# READ all customers, supports ?page= and ?per_page= for pagination
 @customer_bp.route("/", methods=['GET'])
 def get_customers():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+
     query = select(Customer)
-    customers = db.session.execute(query).scalars().all()
-    return customers_schema.jsonify(customers)
+    customers = db.paginate(query, page=page, per_page=per_page)
+
+    return customers_schema.jsonify(customers.items)
 
 
 # READ a single customer by id
@@ -46,8 +76,18 @@ def get_customer(customer_id):
     return jsonify({"error": "Customer not found."}), 404
 
 
-# UPDATE a customer by id
-@customer_bp.route("/<int:customer_id>", methods=['PUT'])
+# READ service tickets belonging to the logged-in customer
+@customer_bp.route("/my-tickets", methods=['GET'])
+@token_required
+def get_my_tickets(customer_id):
+    query = select(ServiceTicket).where(ServiceTicket.customer_id == customer_id)
+    tickets = db.session.execute(query).scalars().all()
+    return service_tickets_schema.jsonify(tickets), 200
+
+
+# UPDATE the logged-in customer's own account
+@customer_bp.route("/", methods=['PUT'])
+@token_required
 def update_customer(customer_id):
     customer = db.session.get(Customer, customer_id)
 
@@ -55,7 +95,7 @@ def update_customer(customer_id):
         return jsonify({"error": "Customer not found."}), 404
 
     try:
-        customer_data = customer_schema.load(request.json)
+        customer_data = customer_schema.load(request.json, partial=True)
     except ValidationError as e:
         return jsonify(e.messages), 400
 
@@ -66,8 +106,9 @@ def update_customer(customer_id):
     return customer_schema.jsonify(customer), 200
 
 
-# DELETE a customer by id
-@customer_bp.route("/<int:customer_id>", methods=['DELETE'])
+# DELETE the logged-in customer's own account
+@customer_bp.route("/", methods=['DELETE'])
+@token_required
 def delete_customer(customer_id):
     customer = db.session.get(Customer, customer_id)
 

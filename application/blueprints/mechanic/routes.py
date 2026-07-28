@@ -2,7 +2,7 @@ from flask import request, jsonify
 from sqlalchemy import select
 from marshmallow import ValidationError
 
-from application.extensions import db
+from application.extensions import db, cache
 from application.models import Mechanic
 from application.blueprints.mechanic import mechanic_bp
 from application.blueprints.mechanic.schemas import mechanic_schema, mechanics_schema
@@ -30,6 +30,7 @@ def create_mechanic():
 
 # READ all mechanics
 @mechanic_bp.route("/", methods=['GET'])
+@cache.cached(timeout=60)  # avoids repeat db queries for 60 seconds
 def get_mechanics():
     query = select(Mechanic)
     mechanics = db.session.execute(query).scalars().all()
@@ -45,7 +46,7 @@ def update_mechanic(mechanic_id):
         return jsonify({"error": "Mechanic not found."}), 404
 
     try:
-        mechanic_data = mechanic_schema.load(request.json)
+        mechanic_data = mechanic_schema.load(request.json, partial=True)
     except ValidationError as e:
         return jsonify(e.messages), 400
 
@@ -67,3 +68,16 @@ def delete_mechanic(mechanic_id):
     db.session.delete(mechanic)
     db.session.commit()
     return jsonify({"message": f"Mechanic id: {mechanic_id}, successfully deleted."}), 200
+
+
+# READ mechanics sorted by number of tickets worked on, most first
+@mechanic_bp.route("/most-tickets", methods=['GET'])
+def get_mechanics_by_ticket_count():
+    query = select(Mechanic)
+    mechanics = db.session.execute(query).scalars().all()
+
+    # sort using ticket count as the key, reverse=True for descending order
+    mechanics = list(mechanics)
+    mechanics.sort(key=lambda mechanic: len(mechanic.service_tickets), reverse=True)
+
+    return mechanics_schema.jsonify(mechanics), 200

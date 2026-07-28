@@ -10,6 +10,14 @@ service_mechanics = db.Table(
     db.Column('mechanic_id', db.ForeignKey('mechanics.id'))
 )
 
+# Junction table enabling the Many-to-Many relationship between tickets and inventory parts
+service_ticket_inventory = db.Table(
+    'service_ticket_inventory',
+    Base.metadata,
+    db.Column('ticket_id', db.ForeignKey('service_tickets.id')),
+    db.Column('inventory_id', db.ForeignKey('inventory.id'))
+)
+
 
 class Customer(Base):
     """A customer who brings vehicles in for service."""
@@ -19,6 +27,7 @@ class Customer(Base):
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     email: Mapped[str] = mapped_column(db.String(255), nullable=False, unique=True)
     phone: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    password: Mapped[str] = mapped_column(db.String(255), nullable=False)
 
     # One-to-Many: a customer can have multiple service tickets
     service_tickets: Mapped[List['ServiceTicket']] = db.relationship(
@@ -47,6 +56,12 @@ class ServiceTicket(Base):
         back_populates='service_tickets'
     )
 
+    # Many-to-Many: a ticket can require multiple inventory parts
+    inventory_items: Mapped[List['Inventory']] = db.relationship(
+        secondary=service_ticket_inventory,
+        back_populates='service_tickets'
+    )
+
 
 class Mechanic(Base):
     """An employee who performs work on service tickets."""
@@ -62,4 +77,19 @@ class Mechanic(Base):
     service_tickets: Mapped[List['ServiceTicket']] = db.relationship(
         secondary=service_mechanics,
         back_populates='mechanics'
+    )
+
+
+class Inventory(Base):
+    """A part that can be used on service tickets."""
+    __tablename__ = 'inventory'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    price: Mapped[float] = mapped_column(db.Float, nullable=False)
+
+    # Many-to-Many: a part can be used on multiple tickets
+    service_tickets: Mapped[List['ServiceTicket']] = db.relationship(
+        secondary=service_ticket_inventory,
+        back_populates='inventory_items'
     )
