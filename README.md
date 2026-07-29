@@ -15,6 +15,8 @@ A RESTful API for managing a mechanic shop's customers, mechanics, service ticke
 - Bulk add/remove of mechanics on a service ticket
 - Endpoint ranking mechanics by number of tickets worked
 - Request validation and serialization via Marshmallow schemas
+- Interactive API documentation via Swagger UI
+- Full automated test suite covering every endpoint (positive and negative cases)
 - Modular blueprint structure for scalability
 - Environment-based configuration (Development / Testing / Production)
 
@@ -26,8 +28,10 @@ A RESTful API for managing a mechanic shop's customers, mechanics, service ticke
 - **Flask-Limiter** – rate limiting
 - **Flask-Caching** – response caching
 - **python-jose** – JWT token encoding/decoding
+- **flask-swagger-ui** – interactive API documentation
 - **MySQL** – database
 - **python-dotenv** – environment variable management
+- **unittest** – automated testing
 
 ## Project Structure
 
@@ -37,6 +41,8 @@ mechanic_shop/
 │   ├── __init__.py              # create_app() factory function
 │   ├── extensions.py            # db, ma, limiter, and cache instances
 │   ├── models.py                # Customer, ServiceTicket, Mechanic, Inventory models
+│   ├── static/
+│   │   └── swagger.yaml         # OpenAPI/Swagger documentation for all endpoints
 │   ├── utils/
 │   │   └── util.py              # encode_token() and token_required decorator
 │   └── blueprints/
@@ -56,12 +62,17 @@ mechanic_shop/
 │           ├── __init__.py
 │           ├── routes.py
 │           └── schemas.py
+├── tests/
+│   ├── test_customer.py
+│   ├── test_mechanic.py
+│   ├── test_service_ticket.py
+│   └── test_inventory.py
 ├── app.py                       # entry point, runs create_app()
 ├── config.py                    # environment configuration classes
 ├── .env                         # local environment variables (not committed)
 ├── .gitignore
 ├── requirements.txt
-└── Mechanic_Shop_API.postman_collection.json
+└── Mechanic_Shop_API_v2.postman_collection.json
 ```
 
 ## Entity-Relationship Overview
@@ -103,7 +114,10 @@ In MySQL Workbench or the MySQL CLI:
 
 ```sql
 CREATE DATABASE mechanic_shop_db;
+CREATE DATABASE mechanic_shop_test_db;
 ```
+
+The second database is used exclusively by the automated test suite, so tests never touch real data.
 
 ### 5. Configure environment variables
 
@@ -120,6 +134,16 @@ python app.py
 ```
 
 The API will be available at `http://127.0.0.1:5000`. Tables are created automatically on startup if they don't already exist.
+
+## API Documentation
+
+Interactive Swagger documentation is available once the app is running:
+
+```
+http://127.0.0.1:5000/api/docs/
+```
+
+This includes every endpoint grouped by resource (Customers, Mechanics, Service Tickets, Inventory), with example request/response bodies and the ability to test routes directly from the browser using the "Try it out" feature.
 
 ## API Endpoints
 
@@ -176,12 +200,26 @@ Authorization: Bearer <token>
 
 ## Testing
 
-A Postman collection (`Mechanic_Shop_API.postman_collection.json`) is included with pre-built requests for every endpoint, organized by resource. Import it into Postman to test the API:
+### Automated tests
+
+A full `unittest` suite covers every endpoint, including negative cases (missing fields, duplicate emails, invalid login, missing/invalid tokens, and not-found lookups). Tests run against a dedicated `mechanic_shop_test_db` database, so they never touch real data — each test resets the database via `db.drop_all()` / `db.create_all()` before running.
+
+Run the full suite:
+
+```bash
+python -m unittest discover tests
+```
+
+### Manual testing
+
+A Postman collection (`Mechanic_Shop_API_v2.postman_collection.json`) is included with pre-built requests for every endpoint, organized by resource. Import it into Postman to test the API:
 
 1. Open Postman
 2. Click **Import**
-3. Select `Mechanic_Shop_API.postman_collection.json`
+3. Select `Mechanic_Shop_API_v2.postman_collection.json`
 4. Run **Login** first, then copy the returned `auth_token` into the collection's `auth_token` variable to use the protected routes
+
+Alternatively, use the Swagger UI at `/api/docs/` to test endpoints directly from the browser.
 
 ## Notes
 
