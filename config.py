@@ -22,6 +22,15 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = f"mysql+mysqlconnector://root:{os.environ.get('DB_PASSWORD')}@localhost/mechanic_shop_test_db"
 
 
-class ProductionConfig(Config):
-    """Configuration used in a live/production deployment."""
+class ProductionConfig:
+    """Configuration used in the live/production deployment on Render.
+
+    Does NOT inherit from Config, since the base class hardcodes a local
+    MySQL URI — production instead reads its Postgres URL straight from
+    the environment variable Render injects (and that we set locally
+    in .env for testing the config before deploying).
+    """
+    SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
     DEBUG = False
+    CACHE_TYPE = "SimpleCache"

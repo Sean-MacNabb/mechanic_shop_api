@@ -1,10 +1,14 @@
+import os
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import request, jsonify
 from jose import jwt
 import jose
 
-SECRET_KEY = "a super secret, secret key"
+# Falls back to a hardcoded value if SECRET_KEY isn't set as an environment
+# variable — needed for local dev/testing and CI, where no such env var
+# exists. In production (Render), the real SECRET_KEY env var overrides this.
+SECRET_KEY = os.environ.get('SECRET_KEY') or "a super secret, secret key"
 
 
 # Builds a JWT containing the customer's id, valid for 1 hour
