@@ -1,9 +1,14 @@
 import os
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
+# python-dotenv is only installed locally (it's intentionally excluded from
+# requirements.txt) — Render's production environment injects env vars
+# directly, so it never needs this package. Guard the import so startup
+# doesn't crash in production.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 class Config:
     """Base configuration with settings shared across all environments."""
